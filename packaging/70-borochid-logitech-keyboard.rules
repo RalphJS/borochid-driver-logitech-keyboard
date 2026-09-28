@@ -1,0 +1,23 @@
+# Access to the HID++ interface of Logitech keyboards and their receivers, for the
+# Borochid HID++ broker ONLY (group borochid-hidpp). Deliberately not
+# TAG+="uaccess": the G915 has HID++ feature 0x1BC0 (REPORT_HID_USAGE),
+# which reports every key press over this interface when enabled, so raw
+# access for the session user would let any program they run read
+# keystrokes. The broker passes only an allowlist of HID++ calls and never
+# that feature (see src/borochid_logitech_keyboard/broker/policy.py).
+#
+# Only interface 2 (vendor page, HID++ reports 0x10/0x11) is matched. The
+# receiver's interfaces 0 and 1 carry the keystrokes themselves and are
+# left untouched. The IDs must match SUPPORTED in broker/server.py.
+
+# G915 WIRELESS LIGHTSPEED receiver (bound to hid-generic: no per-device node)
+SUBSYSTEM=="hidraw", ENV{ID_VENDOR_ID}=="046d", ENV{ID_MODEL_ID}=="c541", ENV{ID_USB_INTERFACE_NUM}=="02", GROUP="borochid-hidpp", MODE="0660"
+
+# G915 WIRELESS on its USB cable (the keyboard itself, same interface layout)
+SUBSYSTEM=="hidraw", ENV{ID_VENDOR_ID}=="046d", ENV{ID_MODEL_ID}=="c33e", ENV{ID_USB_INTERFACE_NUM}=="02", GROUP="borochid-hidpp", MODE="0660"
+
+# G915 WIRELESS over Bluetooth (BlueZ HID-over-GATT, a uhid device on bus
+# 0005). One HID device carries keystrokes and HID++ alike, so this node is
+# for the broker only, like the others; its policy passes HID++ reports only.
+# The IDs must match SUPPORTED_BT in broker/server.py.
+SUBSYSTEM=="hidraw", KERNELS=="0005:046D:B354.*", GROUP="borochid-hidpp", MODE="0660"

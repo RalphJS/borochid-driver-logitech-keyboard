@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "borochid-driver-logitech-keyboard"
+version = "0.1.0"
+description = "Borochid driver for Logitech keyboards speaking HID++ 2.0, with a privilege-separated device broker"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+dependencies = ["borochid-service>=0.1,<0.2", "borochid-driver-logitech-hidpp>=0.1,<0.2"]
+
+[project.scripts]
+# The broker runs as its own system user and imports only the standard
+# library and this package's broker/ and wire.py.
+borochid-hidpp-broker = "borochid_logitech_keyboard.broker.server:main"
+
+[project.entry-points."borochid.drivers"]
+logitech-hidpp-keyboard = "borochid_logitech_keyboard.driver:KeyboardDriver"
+
+[project.entry-points."borochid.channels"]
+logitech-hidpp-broker = "borochid_logitech_keyboard.channel:BrokerChannel"
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
