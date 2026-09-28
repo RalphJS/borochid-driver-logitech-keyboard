@@ -1,0 +1,52 @@
+# The HID++ broker: owns the HID++ node of supported Logitech keyboard
+# receivers (see 70-borochid-logitech-keyboard.rules) and gives the Borochid
+# user service a filtered pipe to it. It runs as its own unprivileged user,
+# with no capabilities, no network and a read-only view of the system.
+[Unit]
+Description=Borochid HID++ broker
+Documentation=https://github.com/RalphJS/borochid-driver-logitech-keyboard
+Requires=borochid-hidpp-broker.socket
+After=borochid-hidpp-broker.socket
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/borochid-hidpp-broker
+User=borochid-hidpp
+Group=borochid-hidpp
+Restart=on-failure
+
+# Hardening. It needs: the socket from systemd, read access to /sys (USB
+# topology) and /run/systemd/seats (who the active user is), and read/write
+# to /dev/hidraw* nodes its group owns.
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+PrivateIPC=yes
+RestrictAddressFamilies=AF_UNIX
+DevicePolicy=closed
+DeviceAllow=char-hidraw rw
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+UMask=0077
+
+[Install]
+Also=borochid-hidpp-broker.socket
