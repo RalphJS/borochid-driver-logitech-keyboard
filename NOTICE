@@ -1,0 +1,14 @@
+borochid-driver-logitech-keyboard
+Copyright 2026 Rodolfo Justiniano
+
+HID++ 2.0 protocol facts for keyboards (feature IDs, function numbers,
+lighting effect parameters, per-key frame commands, G/M/MR key
+notifications, receiver notification flags) were learned from the public
+documentation and behaviour of:
+
+* Solaar (GPL-2.0), https://github.com/pwr-Solaar/Solaar
+* OpenRGB (GPL-2.0), https://gitlab.com/CalcProgrammer1/OpenRGB
+
+Only protocol facts were used; no code was copied. Device behaviour (host
+mode, notification flags, game mode, key and LED numbers) was measured on a
+G915 WIRELESS through its LIGHTSPEED receiver (046d:c541).
