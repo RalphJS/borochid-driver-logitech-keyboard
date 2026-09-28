@@ -203,6 +203,55 @@ def test_one_missed_reply_is_retried_not_taken_for_sleep(run):
     assert set(kb.leds.values()) == {(0, 255, 0)}
 
 
+def test_one_missed_battery_read_is_retried_not_taken_for_sleep(run, monkeypatch):
+    from borochid_logitech_keyboard import driver as driver_module
+
+    async def main():
+        monkeypatch.setattr(driver_module, "BATTERY_POLL_S", 0.05)
+        driver, kb, _, _ = await online()
+        kb.drop_next = 1  # idle for minutes: the poll's first request goes unanswered
+        kb.millivolts = 3700
+        await asyncio.sleep(0.3)
+        return driver
+
+    driver = run(main())
+    assert driver.state["link"] == "online" and driver.state["battery"] < 55
+
+
+def test_quiet_with_the_link_up_is_looked_at_again_until_back(run, monkeypatch):
+    from borochid_logitech_keyboard import driver as driver_module
+
+    async def main():
+        monkeypatch.setattr(driver_module, "ASLEEP_PROBE_S", 0.05)
+        monkeypatch.setattr(driver_module, "BATTERY_POLL_S", 0.05)
+        driver, kb, _, _ = await online()
+        kb.asleep = True  # no reply to the battery poll, no link report either
+        await asyncio.sleep(0.3)
+        assert driver.state["link"] == "asleep"
+        kb.asleep = False  # typed on: nothing the driver sees, but it answers again
+        await asyncio.sleep(0.3)
+        return driver, kb
+
+    driver, kb = run(main())
+    assert driver.state["link"] == "online" and kb.mode == 2 and kb.diverted
+
+
+def test_a_lost_link_is_not_probed(run, monkeypatch):
+    from borochid_logitech_keyboard import driver as driver_module
+
+    async def main():
+        monkeypatch.setattr(driver_module, "ASLEEP_PROBE_S", 0.05)
+        driver, kb, _, _ = await online()
+        kb.link(False)  # switched off: the receiver says when it's back
+        await settle(driver)
+        calls = len(kb.calls)
+        await asyncio.sleep(0.3)
+        return driver, kb, calls
+
+    driver, kb, calls = run(main())
+    assert driver.state["link"] == "asleep" and len(kb.calls) == calls
+
+
 def test_power_cycle_takes_over_again(run):
     async def main():
         driver, kb, _, _ = await online()
