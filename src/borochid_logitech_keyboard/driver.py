@@ -36,6 +36,9 @@ Measured on a G915 through its LIGHTSPEED receiver (046d:c541):
 * A sleeping keyboard answers nothing; the next report from it (or a link
   report) wakes the driver, which sets everything up again. Host mode
   doesn't survive a power cycle, so setting up again is always safe.
+* After idle minutes it can miss a request with its link still up, and then
+  send nothing the driver sees while typed on: without a link report the
+  driver asks again every ``ASLEEP_PROBE_S``.
 
 Link states, published as ``link``: ``connecting`` (no broker yet),
 ``online``, ``asleep``, ``error``.
@@ -80,6 +83,7 @@ SW_CONTROL_RELEASE = (1, 0, 0)
 USAGES_PER_CALL = 16
 LINK_REPORTS = (0x40, 0x41)  # HID++ 1.0 receiver notifications: disconnect, connect
 BATTERY_POLL_S = 300
+ASLEEP_PROBE_S = 30  # asleep with no link report: how often to see whether it's back
 NUMLOCK_POLL_S = 0.25  # sysfs has no change events for an input LED
 NUMLOCK_FIND_S = 2.0  # how often to look for the LED again while it's missing
 HID_SYSFS = Path("/sys/bus/hid/devices")
@@ -118,6 +122,7 @@ class KeyboardDriver(Driver):
         self._has_rate = True  # no REPORT_RATE over Bluetooth: the link sets the rate
         self._apply_lock = asyncio.Lock()  # one frame at a time: a Num Lock change can't split one
         self._ready = False
+        self._link_lost = False  # the receiver said the keyboard is gone (off, out of range)
         self._wake = asyncio.Event()
         self._tasks: set[asyncio.Task] = set()
         if hasattr(self.channel, "on_link"):
@@ -459,10 +464,26 @@ class KeyboardDriver(Driver):
 
     async def _poll_battery(self) -> None:
         while True:
-            await asyncio.sleep(BATTERY_POLL_S)
+            # Gone quiet with the link still up, nothing says when it's back:
+            # typing makes no HID++ traffic. So look again, sooner.
+            await asyncio.sleep(ASLEEP_PROBE_S if self._quiet_on_link() else BATTERY_POLL_S)
             if self._ready:
-                with contextlib.suppress(HidppError):
-                    await self._read_battery()
+                try:
+                    try:
+                        await self._read_battery()
+                    except Quiet:
+                        # Idle for minutes: the first request can go unanswered
+                        # while its radio wakes up. One more try, as in _changed.
+                        await self._read_battery()
+                except Quiet as e:
+                    self._went_quiet(e)
+                except HidppError:
+                    pass
+            elif self._quiet_on_link():
+                self._wake.set()  # set up again; if it's still quiet, it stays asleep
+
+    def _quiet_on_link(self) -> bool:
+        return self.state.get("link") == "asleep" and not self._link_lost
 
     # -- input from the keyboard -------------------------------------------------
 
@@ -483,6 +504,7 @@ class KeyboardDriver(Driver):
     def _link_report(self, data: bytes) -> None:
         # [0x10, index, 0x41, protocol, flags, pid lo, pid hi]; flags bit 6: no link.
         lost = data[2] == 0x40 or (len(data) > 4 and bool(data[4] & 0x40))
+        self._link_lost = lost
         if lost:
             log.info("%s: keyboard link lost", self.channel.ident.uid)
             self._went_quiet()
